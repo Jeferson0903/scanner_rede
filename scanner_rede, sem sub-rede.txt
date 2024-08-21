@@ -15,7 +15,7 @@ def get_ip_and_subnet():
 def scan_subnet(destino):
     nm = nmap.PortScanner()
     try:
-        nm.scan(hosts=destino, arguments='-sn -T4 --max-retries 0')
+        nm.scan(hosts=destino, arguments='-sn -T4 --max-retries 1')
         hosts_ativos = nm.all_hosts()
         
         if hosts_ativos:
@@ -23,31 +23,29 @@ def scan_subnet(destino):
             for host in hosts_ativos:
                 host_state = nm[host].state()
                 results_text.insert(tk.END, f'{host} está {host_state}\n')
-                scan_ports(host)
         else:
             results_text.insert(tk.END, 'Nenhum host ativo encontrado na sub-rede.\n')
 
+        if hosts_ativos:
+            for host_ip in hosts_ativos:
+                try:
+                    nm.scan(hosts=host_ip, arguments='-p 1-1000 -T4 --max-retries 1')
+                    if 'tcp' in nm[host_ip]:
+                        results_text.insert(tk.END, f'Portas abertas no host {host_ip}:\n')
+                        for port in nm[host_ip]['tcp']:
+                            port_state = nm[host_ip]['tcp'][port]['state']
+                            port_name = nm[host_ip]['tcp'][port].get('name', 'unknown')
+                            results_text.insert(tk.END, f'    Porta {port} ({port_name}) está {port_state}\n')
+                    else:
+                        results_text.insert(tk.END, f'Nenhuma porta TCP detectada no host {host_ip}.\n')
+                except Exception as e:
+                    results_text.insert(tk.END, f'Erro ao escanear portas do host {host_ip}: {e}\n')
+        
     except Exception as e:
         results_text.insert(tk.END, f'Erro ao escanear a sub-rede: {e}\n')
 
-# Função para escanear portas de um host específico
-def scan_ports(host_ip):
-    nm = nmap.PortScanner()
-    try:
-        nm.scan(hosts=host_ip, arguments='-p 22,80,443 -T4 --max-retries 0')
-        if 'tcp' in nm[host_ip]:
-            results_text.insert(tk.END, f'Portas abertas no host {host_ip}:\n')
-            for port in nm[host_ip]['tcp']:
-                port_state = nm[host_ip]['tcp'][port]['state']
-                port_name = nm[host_ip]['tcp'][port].get('name', 'unknown')
-                results_text.insert(tk.END, f'    Porta {port} ({port_name}) está {port_state}\n')
-        else:
-            results_text.insert(tk.END, f'Nenhuma porta TCP detectada no host {host_ip}.\n')
-    except Exception as e:
-        results_text.insert(tk.END, f'Erro ao escanear portas do host {host_ip}: {e}\n')
-
 # Função para gerar sub-redes vizinhas
-def generate_nearby_subnets(base_subnet, range_limit=1):
+def generate_nearby_subnets(base_subnet, range_limit=2):
     base_ip = base_subnet.rsplit('.', 2)[0]
     subnets = []
     # Limita a geração para escanear sub-redes próximas (anterior e seguinte)
@@ -65,11 +63,16 @@ def scan_network():
     results_text.insert(tk.END, f'Escaneando a sub-rede principal: {ip_principal}\n')
     scan_subnet(ip_principal)
     
-    # Gerar e escanear sub-redes vizinhas
+    # Gerar e escanear sub-redes vizinhas em paralelo
     nearby_subnets = generate_nearby_subnets(ip_principal)
+    threads = []
     for subnet in nearby_subnets:
-        results_text.insert(tk.END, f'Escaneando a sub-rede: {subnet}\n')
-        scan_subnet(subnet)
+        t = threading.Thread(target=scan_subnet, args=(subnet,))
+        t.start()
+        threads.append(t)
+    
+    for t in threads:
+        t.join()
 
 window = tk.Tk()
 window.title("Scanner de Rede")
