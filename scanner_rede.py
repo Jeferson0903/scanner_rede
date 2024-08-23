@@ -4,6 +4,10 @@ import tkinter as tk
 from tkinter import scrolledtext
 import threading
 import scapy.all as scapy
+import warnings
+
+# Suprimir todos os avisos de depreciação
+warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 # Função para obter o IP local e a sub-rede principal
 def get_ip_and_subnet():
@@ -24,7 +28,7 @@ def get_hostname(ip):
 def scan_subnet(destino):
     nm = nmap.PortScanner()
     try:
-        nm.scan(hosts=destino, arguments='-sn -T4 --max-retries 0')
+        nm.scan(hosts=destino, arguments='-sn -T4 --min-parallelism 10 --max-retries 0')
         hosts_ativos = nm.all_hosts()
         
         if hosts_ativos:
@@ -33,7 +37,7 @@ def scan_subnet(destino):
                 host_state = nm[host].state()
                 hostname = get_hostname(host)
                 results_text.insert(tk.END, f'{host} ({hostname}) está {host_state}\n')
-                # Utilizar threads para escanear portas
+                # Utilizar threads para escanear portas de forma otimizada
                 threading.Thread(target=scan_ports, args=(host,)).start()
         else:
             results_text.insert(tk.END, 'Nenhum host ativo encontrado na sub-rede.\n')
@@ -45,7 +49,7 @@ def scan_subnet(destino):
 def scan_ports(host_ip):
     nm = nmap.PortScanner()
     try:
-        nm.scan(hosts=host_ip, arguments='-p 22,80,443 -T4 --max-retries 0')
+        nm.scan(hosts=host_ip, arguments='-p 22,80,443 -T4 --min-parallelism 10 --max-retries 0')
         if 'tcp' in nm[host_ip]:
             results_text.insert(tk.END, f'Portas abertas no host {host_ip}:\n')
             for port in nm[host_ip]['tcp']:
