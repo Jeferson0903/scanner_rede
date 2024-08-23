@@ -3,13 +3,22 @@ import socket
 import tkinter as tk
 from tkinter import scrolledtext
 import threading
+import scapy.all as scapy
 
-# Função para obter o IP local e a sub-rede
+# Função para obter o IP local e a sub-rede principal
 def get_ip_and_subnet():
     hostname = socket.gethostname()
     ip_local = socket.gethostbyname(hostname)
     ip_network = ip_local.rsplit('.', 1)[0] + '.0/24'
     return ip_local, ip_network
+
+# Função para obter o nome do host (hostname) a partir de um IP
+def get_hostname(ip):
+    try:
+        hostname = socket.gethostbyaddr(ip)[0]
+    except (socket.herror, socket.gaierror):
+        hostname = "Hostname desconhecido"
+    return hostname
 
 # Função para escanear uma sub-rede específica
 def scan_subnet(destino):
@@ -22,8 +31,10 @@ def scan_subnet(destino):
             results_text.insert(tk.END, 'Hosts Ativos Encontrados:\n')
             for host in hosts_ativos:
                 host_state = nm[host].state()
-                results_text.insert(tk.END, f'{host} está {host_state}\n')
-                scan_ports(host)
+                hostname = get_hostname(host)
+                results_text.insert(tk.END, f'{host} ({hostname}) está {host_state}\n')
+                # Utilizar threads para escanear portas
+                threading.Thread(target=scan_ports, args=(host,)).start()
         else:
             results_text.insert(tk.END, 'Nenhum host ativo encontrado na sub-rede.\n')
 
@@ -46,14 +57,28 @@ def scan_ports(host_ip):
     except Exception as e:
         results_text.insert(tk.END, f'Erro ao escanear portas do host {host_ip}: {e}\n')
 
-# Função para gerar sub-redes vizinhas
-def generate_nearby_subnets(base_subnet, range_limit=1):
-    base_ip = base_subnet.rsplit('.', 2)[0]
-    subnets = []
-    # Limita a geração para escanear sub-redes próximas (anterior e seguinte)
-    for i in range(max(0, int(base_subnet.split('.')[2]) - range_limit), min(256, int(base_subnet.split('.')[2]) + range_limit + 1)):
-        subnets.append(f"{base_ip}.{i}.0/24")
-    return subnets
+# Função para escanear a sub-rede com ARP usando Scapy
+def scan_subnet_with_arp(subnet):
+    results_text.insert(tk.END, f'Escaneando com ARP a sub-rede: {subnet}\n')
+    arp_request = scapy.ARP(pdst=subnet)
+    broadcast = scapy.Ether(dst="ff:ff:ff:ff:ff:ff")
+    arp_request_broadcast = broadcast/arp_request
+    answered_list = scapy.srp(arp_request_broadcast, timeout=2, verbose=False)[0]
+
+    if answered_list:
+        results_text.insert(tk.END, 'Dispositivos Encontrados:\n')
+        for element in answered_list:
+            results_text.insert(tk.END, f'{element[1].psrc} ({element[1].hwsrc})\n')
+    else:
+        results_text.insert(tk.END, 'Nenhum dispositivo encontrado na sub-rede com ARP.\n')
+
+# Função para descobrir sub-redes adicionais
+def discover_additional_subnets():
+    results_text.insert(tk.END, 'Tentando descobrir sub-redes adicionais...\n')
+    # Limite o intervalo de verificação para sub-redes comuns
+    for i in range(1, 10):  # Ajuste o intervalo conforme necessário
+        subnet = f'192.168.{i}.0/24'
+        scan_subnet(subnet)
 
 # Função para executar a varredura de rede e atualizar a interface
 def scan_network():
@@ -65,12 +90,18 @@ def scan_network():
     results_text.insert(tk.END, f'Escaneando a sub-rede principal: {ip_principal}\n')
     scan_subnet(ip_principal)
     
-    # Gerar e escanear sub-redes vizinhas
-    nearby_subnets = generate_nearby_subnets(ip_principal)
-    for subnet in nearby_subnets:
-        results_text.insert(tk.END, f'Escaneando a sub-rede: {subnet}\n')
-        scan_subnet(subnet)
+    # Descobrir sub-redes adicionais
+    discover_additional_subnets()
 
+    # Escanear sub-rede do roteador secundário
+    results_text.insert(tk.END, 'Escaneando a sub-rede do roteador secundário: 192.168.1.0/24\n')
+    scan_subnet('192.168.1.0/24')
+
+    # Adicionar escaneamento ARP
+    scan_subnet_with_arp(ip_principal)
+    scan_subnet_with_arp('192.168.1.0/24')
+
+# Configuração da interface gráfica
 window = tk.Tk()
 window.title("Scanner de Rede")
 
