@@ -29,7 +29,8 @@ def get_hostname(ip):
 def scan_subnet(destino):
     nm = nmap.PortScanner()
     try:
-        nm.scan(hosts=destino, arguments='-sn -T4 --min-parallelism 10 --max-retries 0')
+        # Aumente o tempo de espera e número de tentativas para uma detecção mais robusta
+        nm.scan(hosts=destino, arguments='-sn -T4 --min-parallelism 10 --max-retries 2')
         hosts_ativos = nm.all_hosts()
 
         if hosts_ativos:
@@ -53,7 +54,7 @@ def scan_subnet(destino):
 def scan_ports(host_ip):
     nm = nmap.PortScanner()
     try:
-        nm.scan(hosts=host_ip, arguments='-p 22,80,443 -T4 --min-parallelism 10 --max-retries 0')
+        nm.scan(hosts=host_ip, arguments='-p 22,80,443 -T4 --min-parallelism 10 --max-retries 2')
         if 'tcp' in nm[host_ip]:
             results_text.insert(tk.END, f'\nPortas abertas no host {host_ip}:\n', 'header')
             for port in nm[host_ip]['tcp']:
@@ -74,7 +75,7 @@ def scan_subnet_with_arp(subnet):
     arp_request = scapy.ARP(pdst=subnet)
     broadcast = scapy.Ether(dst="ff:ff:ff:ff:ff:ff")
     arp_request_broadcast = broadcast/arp_request
-    answered_list = scapy.srp(arp_request_broadcast, timeout=2, verbose=False)[0]
+    answered_list = scapy.srp(arp_request_broadcast, timeout=5, verbose=False)[0]  # Aumente o timeout se necessário
 
     if answered_list:
         results_text.insert(tk.END, 'Dispositivos Encontrados:\n', 'header')
