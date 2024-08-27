@@ -102,10 +102,12 @@ def discover_additional_subnets():
 def scan_network():
     results_text.delete(1.0, tk.END)
     ip_local, ip_principal = get_ip_and_subnet()
-    results_text.insert(tk.END, f'IP Local: {ip_local}\n', 'info')
+    
+    # Destacar o IP local e a sub-rede principal
+    results_text.insert(tk.END, f'IP Local: {ip_local}\n', 'highlight')
+    results_text.insert(tk.END, f'\nEscaneando a sub-rede principal: {ip_principal}\n', 'highlight')
 
     # Escanear a sub-rede principal
-    results_text.insert(tk.END, f'\nEscaneando a sub-rede principal: {ip_principal}\n', 'info')
     scan_subnet(ip_principal)
     
     # Descobrir sub-redes adicionais
@@ -158,6 +160,7 @@ results_text.tag_configure('port', foreground='#0033cc', font=('Courier New', 10
 results_text.tag_configure('arp', foreground='#cc6600', font=('Courier New', 10))
 results_text.tag_configure('info', foreground='#111111', font=('Courier New', 10))
 results_text.tag_configure('error', foreground='#ff0000', font=('Courier New', 10))
+results_text.tag_configure('highlight', foreground='#FFA500', font=('Courier New', 15, 'bold'))
 
 # Função para atualizar a barra de progresso
 def update_progress(value):
